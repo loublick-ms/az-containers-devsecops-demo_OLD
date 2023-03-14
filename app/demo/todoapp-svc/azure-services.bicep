@@ -32,18 +32,18 @@ param sqlServerName string = 'sql-dbs-${serviceNameSuffix}'
 param sqlDBName string = 'sql-db-${serviceNameSuffix}'
 
 @description('The administrator username of the SQL logical server.')
-param administratorLogin string
+param sqlAdminLogin string
 
 @description('The administrator password of the SQL logical server.')
 @secure()
-param administratorLoginPassword string
+param sqlAdminPassword string
 
 resource sqlServer 'Microsoft.Sql/servers@2022-05-01-preview' = {
   name: sqlServerName
   location: location
   properties: {
-    administratorLogin: administratorLogin
-    administratorLoginPassword: administratorLoginPassword
+    administratorLogin: sqlAdminLogin
+    administratorLoginPassword: sqlAdminPassword
   }
 }
 
