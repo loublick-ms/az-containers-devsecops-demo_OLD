@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "DotNetCoreSqlDb": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:6079;http://localhost:6080"
+    }
+  }
+}
