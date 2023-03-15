@@ -3,7 +3,7 @@
 param dnsPrefix string = resourceGroup().name // name is obtained from env
 
 @description('The unique name suffix for all Azure services.')
-param serviceNameSuffix string = 'containers-devsecops-demo'
+param serviceNameSuffix string = 'containers-devsecops'
 
 @description('The unique name for the AKS cluster, such as myAKSCluster.')
 param clusterName string = 'aks-${serviceNameSuffix}'
