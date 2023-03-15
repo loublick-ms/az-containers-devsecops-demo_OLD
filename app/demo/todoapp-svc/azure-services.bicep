@@ -12,7 +12,7 @@ param clusterName string = 'aks-${serviceNameSuffix}'
 param akvName string = 'akv-${serviceNameSuffix}'
 
 @description('The unique name for the Azure Container Registry.')
-param acrName string = 'acr-${replace(serviceNameSuffix, '-', '')}'
+param acrName string = 'acr${replace(serviceNameSuffix, '-', '')}'
 
 @description('Location for all resources.')
 param location string = resourceGroup().location
