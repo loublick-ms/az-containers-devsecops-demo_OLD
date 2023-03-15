@@ -36,9 +36,9 @@ jobs:
       with:
         subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         resourceGroupName: ${{ secrets.CLUSTER_RESOURCE_GROUP }}
-        parameters: 'sqlAdminLogin: ${{ secrets.AZURE_SQL_ADMIN_LOGIN }} sqlAdminPassword: ${{ secrets.AZURE_SQL_ADMIN_PASSWORD }}'
-        template: app/demo/todoapp-svc/azure-services.bicep 
+        parameters: sqlAdminLogin=${{ secrets.AZURE_SQL_ADMIN_LOGIN }} sqlAdminPassword=${{ secrets.AZURE_SQL_ADMIN_PASSWORD }}
         # parameters: app/demo/todoapp-svc/azure-services.parameters.json
+        template: app/demo/todoapp-svc/azure-services.bicep 
         failOnStdErr: false
 
     # AZ feature register for workload identity preview for AKS
