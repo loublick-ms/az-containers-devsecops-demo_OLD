@@ -9,6 +9,8 @@ Repo az-container-demo can be used to demo creating, maintaining, and deploying 
 
 The .NET project is the standard To-Do app commonly used in Azure learning modules and repos. It is configured for ASP.NET Core and .NET Core 7.0. This repo can demonstrate the full application lifecycle, including development, test, deploy, and CI/CD.
 
+NOTE: This demo assumes use of Powershell for the command line.  
+
 ## Prepare the app for deployment to Azure cloud servivces
 
 ### Clone the repo
@@ -439,3 +441,203 @@ Enable GitHub Actions for your repository by clicking on the “Actions” tab, 
 * Click on the Run workflow button.
 
 Alternatively, you can make a change to the azure-services.bicep file (e.g. change the clusterName parameter), and push the change to your Github repo. This will trigger the GitHub Actions workflow.
+
+### Connect to your cluster
+
+To connect to your cluster, use the following commands:
+
+```console
+$CLUSTER_NAME=aks-containers-devsecops
+$RG_NAME=rg-containers-devsecops-demo
+az aks get-credentials --name $CLUSTER_NAME --resource-group $RG_NAME --admin
+kubectl get nodes
+````
+
+## Enabling Workload Identity
+
+Note As of Feb. 2023, this feature is in public preview, with expectations that GA is soon, so the following ‘Register preview providers’ section will not be required once the feature is GA.
+
+Set the following environment variables in your bash session by updating the values and executing in your terminal.
+
+```console
+$RG_NAME='rg-containers-devsecops-demo'
+$LOCATION='eastus'
+$CLUSTER_NAME='aks-containers-devsecops'
+$SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+$KEYVAULT_NAME=$(az keyvault list -g $RG_NAME --query "[0].name" -o tsv)
+$KEYVAULT_SECRET_NAME='kvsncontainersdevsecops'
+```
+
+### Register preview providers on your subscription
+
+Run the following command to register the preview provider feature for Workload Identity.
+
+```console
+az feature register --namespace "Microsoft.ContainerService" --name "EnableWorkloadIdentityPreview"
+```
+
+Wait for the feature to be enabled by running this command, the state should show “Registered” when complete. This may take up to 10 minutes.
+
+```console
+az feature show --namespace "Microsoft.ContainerService" --name "EnableWorkloadIdentityPreview"
+```
+
+Once the Workload Identity preview feature is registered, you must register the parent Microsoft.ContainerService resource provider.
+
+```console
+az provider register --namespace Microsoft.ContainerService
+```
+
+Add and/or update the aks-preview extension with the Azure CLI.
+
+```console
+az extension add --name aks-preview 
+az extension update --name aks-preview
+```
+
+## Enable ODIC and Workload Identity on the AKS Cluster
+
+Execute the following CLI command to enable oidc-issuer and to enable workload identity on your AKS cluster. This operation will take several minutes.
+
+```console
+az aks update --resource-group $RG_NAME --name $CLUSTER_NAME --enable-oidc-issuer --enable-workload-identity
+```
+
+The OIDC Issuer feature allows Azure Active Directory (Azure AD) or other cloud provider identity and access management platforms to discover the API server’s public signing keys. The Azure AD Workload Identity feature for Kubernetes integrates with the capabilities native to Kubernetes to federate with external identity providers. It allows for workloads in your AKS cluster to make use of AAD Managed Identities.
+
+Set the ODIC Issuer URL to a variable for usage later.
+
+```console
+$AKS_OIDC_ISSUER='$(az aks show -n $CLUSTER_NAME -g $RG_NAME --query "oidcIssuerProfile.issuerUrl" -otsv)'
+echo $AKS_OIDC_ISSUER
+echo ($AKS_OIDC_ISSUER + ".well-known/openid-configuration")
+```
+
+Verify that you now see a mutating webhook pod on your cluster. The mutating admission webhook is used to project a signed service account token to a workload’s volume and inject environment variables to pods.
+
+```console
+az aks get-credentials --resource-group $RG_NAME  --name $CLUSTER_NAME --admin --overwrite
+kubectl get pods -n kube-system
+```
+
+### Create a managed identity and grant permission to Azure Keyvault
+
+Create Managed Identity in your resource group.
+
+```console
+$USER_ASSIGNED_IDENTITY_NAME="containers-devsecops-id"
+az identity create --name "$USER_ASSIGNED_IDENTITY_NAME" --resource-group "$RG_NAME" --location "$LOCATION" --subscription "$SUBSCRIPTION_ID"
+
+Create Access Policy against Keyvault, allowing the identity to get secrets.
+
+```console
+$USER_ASSIGNED_CLIENT_ID="$(az identity show --resource-group "$RG_NAME" --name "$USER_ASSIGNED_IDENTITY_NAME" --query 'clientId' -o tsv)"
+az keyvault set-policy --name "$KEYVAULT_NAME" --secret-permissions get --spn "$USER_ASSIGNED_CLIENT_ID" --resource-group "$RG_NAME"
+```
+
+Create a Secret in Key Vault.
+
+```console
+$USERID=$(az ad signed-in-user show --query id -o tsv)
+az keyvault set-policy --name "$KEYVAULT_NAME" --secret-permissions list set get --object-id $USERID --resource-group "$RG_NAME"
+az keyvault secret set --vault-name "$KEYVAULT_NAME" --name "$KEYVAULT_SECRET_NAME" --value "Containers DevSecOps demo\!"
+
+### Create a Service Account and Establish Federated Identity
+
+Create environmennt variables used to create the service account and Federated Identity by executing the following.
+
+```console
+$SERVICE_ACCOUNT_NAME="workload-identity-sa"
+$SERVICE_ACCOUNT_NAMESPACE="default"
+```
+
+Create a YAML file to deploy a K8S service account in the app/demo/todoapp-svc folder. Replace the user assigned client ID created previously for the Key Vault access policy, and the service account name and namespace. Note the annotations and labels required for this service account to leverage Workload Identity.
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    azure.workload.identity/client-id: "<USER_ASSIGNED_CLIENT_ID>"
+  labels:
+    azure.workload.identity/use: "true"
+  name: "<SERVICE_ACCOUNT_NAME>"
+  namespace: "<default>"
+EOF
+```
+
+Deploy K8S service account to Azure.
+
+```console
+kubectl apply -f todoapp-svc/
+```
+
+Establish Federated Identity. The namespace and service account name are used to create the subject identifier in the federation. Once this is setup, this Managed Identity will now trust tokens coming from our Kubernetes cluster. The subject claim identifies the principal that will be the subject of the token.
+
+```console
+az identity federated-credential create --name myfederatedIdentity --identity-name "$USER_ASSIGNED_IDENTITY_NAME" --resource-group "$RG_NAME" --issuer "$AKS_OIDC_ISSUER" --subject system:serviceaccount:"$SERVICE_ACCOUNT_NAMESPACE":"$SERVICE_ACCOUNT_NAME"
+```
+
+After the federation is setup, navigate to your cluster resource group, and you will now see an identity. Click the Identity resource and select the “Federated credentials” blade under Settings.
+
+### Deploy a sample workload and test
+
+Deploy a sample .NET application to test the Workload Identity. You can find source code for different programming languages that implement MSAL and KeyVault integration [here](<https://github.com/Azure/azure-workload-identity/tree/main/examples>).
+
+The following YAML deploys a sample .NET application that writes to the log the content of the secret inside keyvault. The .NET application expects two environment variables for the Kevault URL and the Keyvault secret name references. You can find source code for different programming languages that implement MSAL and KeyVault integration here.
+
+Note the following required annotations in the K8S YAML configuration:
+
+* azure.workload.identity/use: “true”
+* serviceAccountName: <SERVICE_ACCOUNT_NAME>
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: quick-start
+  namespace: "default""
+  labels:
+    azure.workload.identity/use: "true"
+spec:
+  serviceAccountName: "workload-identity-sa"
+  containers:
+    - image: ghcr.io/azure/azure-workload-identity/msal-net
+      name: oidc
+      env:
+      - name: KEYVAULT_URL
+        value: https://akv-containers-devsecops.vault.azure.net/
+      - name: SECRET_NAME
+        value: kvsncontainersdevsecops
+```
+
+Execute the following to retrieve the Key Vault URL.
+
+```console
+export KEYVAULT_URL="$(az keyvault show -g $RG_NAME -n $KEYVAULT_NAME --query properties.vaultUri -o tsv)"
+```
+
+Once the pod is running, ensure the pod is showing the KeyVault secret:
+
+```console
+kubectl logs quick-start
+```
+
+If the pod communication to the Key Vault was successful, you will see the following message: Pod Logs
+
+>START 03/16/2023 18:59:11 (quick-start)
+>Your secret is Containers DevSecOps demo\!
+
+Inspect the additional environment variables and volumeMounts created:
+
+```console
+kubectl describe pod quick-start
+```
+
+You should notice the new environment variables and volume mount.
+
+Additionally, you can inspect the token mounted to the pod by executing into the quick-start container. The path here is found in the volumeMount. You can further copy this token and paste it into jwt.io to inspect the content of the token.
+
+```console
+kubectl exec quick-start -- cat /var/run/secrets/azure/tokens/azure-identity-token
+```
