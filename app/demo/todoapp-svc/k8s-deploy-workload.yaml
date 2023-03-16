@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: quick-start
+  namespace: "default"
+  labels:
+    azure.workload.identity/use: "true"
+spec:
+  serviceAccountName: "workload-identity-sa"
+  containers:
+    - name: oidc
+      image: ghcr.io/azure/azure-workload-identity/msal-net
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 250m
+          memory: 256Mi
+      imagePullPolicy: "Always"
+      livenessProbe:
+        exec:
+          command:
+            - "cat"
+            - "/tmp/healthy"
+      securityContext:
+        runAsNonRoot: true
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+        runAsUser: 10000
+        capabilities:
+          drop:
+            - all
+      env:
+      - name: KEYVAULT_URL
+        value: https://akv-containers-devsecops.vault.azure.net/
+      - name: SECRET_NAME
+        value: kvsncontainersdevsecops
+
+        
