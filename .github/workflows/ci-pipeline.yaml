@@ -68,18 +68,10 @@ jobs:
         with:
           category: "/language:${{matrix.language}}"
         
-  publish:  
-    name: Publish and Upload App Artifacts
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-      
-    steps:
       - name: Publish Artifacts
         run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/app/demo/todoapp
 
-      - name: Upload artifact for deployment job
+      - name: Upload Artifacts for Deployment
         uses: actions/upload-artifact@v2
         with:
           name: .net-app
