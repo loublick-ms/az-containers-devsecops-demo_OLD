@@ -32,22 +32,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'csharp', 'javascript' ]
+        dotnet-version: [ '6.0.x' ]
+        language: [ 'csharp' ]
         # CodeQL supports [ 'cpp', 'csharp', 'go', 'java', 'javascript', 'python', 'ruby' ]
         # Use only 'java' to analyze code written in Java, Kotlin or both
         # Use only 'javascript' to analyze code written in JavaScript, TypeScript or both
         # Learn more about CodeQL language support at https://aka.ms/codeql-docs/language-support
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up .NET Core
-        uses: actions/setup-dotnet@v1
+      - uses: actions/checkout@v3
+      - name: Setup .NET Core SDK ${{ matrix.dotnet-version }}
+        uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: '6.0.x'
-          include-prerelease: true
+          dotnet-version: ${{ matrix.dotnet-version }}
+          #include-prerelease: true
 
+      - name: Install Dependencies
+        run: dotnet restore
+        
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v2
@@ -61,7 +63,7 @@ jobs:
           # queries: security-extended,security-and-quality
 
       - name: Build App with .NET
-        run: dotnet build --configuration Release
+        run: dotnet build app/demo/todoapp/todoapp.csproj --configuration Development
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v2
