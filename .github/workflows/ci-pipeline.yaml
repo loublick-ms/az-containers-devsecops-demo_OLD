@@ -20,6 +20,9 @@ on:
   schedule:
     - cron: '28 13 * * 1'
 
+env:
+  PROJECT_ROOT: app/demo/todoapp
+
 jobs:
   build:
     name: Build and Scan App
@@ -48,7 +51,7 @@ jobs:
           #include-prerelease: true
 
       - name: Install Dependencies
-        run: dotnet restore app/demo/todoapp/todoapp.csproj
+        run: dotnet restore --packages ${{env.PROJECT_ROOT}}/bin/Debug ${{env.PROJECT_ROOT}}/todoapp.csproj
         
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
@@ -63,18 +66,21 @@ jobs:
           # queries: security-extended,security-and-quality
 
       - name: Build App with .NET
-        run: dotnet build app/demo/todoapp/todoapp.csproj --configuration Development
+        run: dotnet build --configuration Debug ${{env.PROJECT_ROOT}}/todoapp.csproj
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v2
         with:
           category: "/language:${{matrix.language}}"
+
+      - name: Test App
+        run: dotnet test ${{env.PROJECT_ROOT}}/todoapp.csproj --no-restore --verbosity normal
         
       - name: Publish Artifacts
-        run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/app/demo/todoapp
+        run: dotnet publish --configuration Debug -o ${{env.PROJECT_ROOT}}/app/demo/todoapp ${{env.PROJECT_ROOT}}/todoapp.csproj
 
       - name: Upload Artifacts for Deployment
         uses: actions/upload-artifact@v2
         with:
           name: .net-app
-          path: ${{env.DOTNET_ROOT}}/app/demo/todoapp
+          path: ${{env.PROJECT_ROOT}}/bin/Debug
