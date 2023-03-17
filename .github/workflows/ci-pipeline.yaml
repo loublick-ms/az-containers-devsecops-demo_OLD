@@ -66,7 +66,7 @@ jobs:
           # queries: security-extended,security-and-quality
 
       - name: Build App with .NET
-        run: dotnet build --configuration Debug ${{env.PROJECT_ROOT}}/todoapp.csproj
+        run: dotnet build --configuration Debug --no-restore ${{env.PROJECT_ROOT}}/todoapp.csproj
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v2
@@ -74,10 +74,18 @@ jobs:
           category: "/language:${{matrix.language}}"
 
       - name: Test App
-        run: dotnet test ${{env.PROJECT_ROOT}}/todoapp.csproj --no-restore --verbosity normal
-        
+        run: dotnet test --logger trx --no-restore --verbosity normal --results-directory "${{env.PROJECT_ROOT}}/bin/Debug/TestResults-${{ matrix.dotnet-version }}" ${{env.PROJECT_ROOT}}/todoapp.csproj
+      - name: Upload dotnet test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: dotnet-results-${{ matrix.dotnet-version }}
+          path: TestResults-${{ matrix.dotnet-version }}
+        # Use always() to always run this step to publish test results when there are test failures
+        if: ${{ always() }}
+
+       
       - name: Publish Artifacts
-        run: dotnet publish --configuration Debug -o ${{env.PROJECT_ROOT}}/app/demo/todoapp ${{env.PROJECT_ROOT}}/todoapp.csproj
+        run: dotnet publish --configuration Debug -o ${{env.PROJECT_ROOT}}/bin/Debug ${{env.PROJECT_ROOT}}/todoapp.csproj
 
       - name: Upload Artifacts for Deployment
         uses: actions/upload-artifact@v2
