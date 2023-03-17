@@ -32,6 +32,13 @@ jobs:
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         # creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+    # Purge Key Vault prior to deploying a new instance
+    - name: Purge Key Vault
+      run: |
+        AKV_NAME=$(az keyvault list-deleted --resource-group ${{ secrets.CLUSTER_RESOURCE_GROUP }} --query "[].name" -o tsv)
+        if ${{ contains(AKV_NAME, "containers") }}
+          az keyvault purge --name $AKV_NAME
+
     # Deploy Bicep file
     - name: Deploy Azure Services
       uses: azure/arm-deploy@v1
