@@ -13,15 +13,20 @@ name: "CI Pipeline"
 
 on:
   push:
-    branches: [ "main" ]
+    branches: 
+      - main
+    paths:
+      - 'app/demo/todoapp/**'
   pull_request:
     # The branches below must be a subset of the branches above
-    branches: [ "main" ]
+    branches:
+      - main
   schedule:
     - cron: '28 13 * * 1'
 
 env:
   PROJECT_ROOT: app/demo/todoapp
+  APP_DIR: app
 
 jobs:
   build:
@@ -51,7 +56,7 @@ jobs:
           #include-prerelease: true
 
       - name: Install Dependencies
-        run: dotnet restore --packages ${{env.PROJECT_ROOT}}/bin/Debug ${{env.PROJECT_ROOT}}/todoapp.csproj
+        run: dotnet restore --packages ${{ env.PROJECT_ROOT }}/${{ env.APP_DIR }}/packages ${{ env.PROJECT_ROOT }}/todoapp.csproj
         
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
@@ -66,15 +71,18 @@ jobs:
           # queries: security-extended,security-and-quality
 
       - name: Build App with .NET
-        run: dotnet build --configuration Debug --no-restore ${{env.PROJECT_ROOT}}/todoapp.csproj
+        run: dotnet build --configuration Debug --no-restore ${{ env.PROJECT_ROOT }}/todoapp.csproj
+
+      - name: Create the Package
+        run: dotnet pack --configuration Debug ${{ env.PROJECT_ROOT }}/todoapp.csproj
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v2
         with:
-          category: "/language:${{matrix.language}}"
+          category: "/language:${{ matrix.language }}"
 
       - name: Test App
-        run: dotnet test --logger trx --no-restore --verbosity normal --results-directory "${{env.PROJECT_ROOT}}/bin/Debug/TestResults-${{ matrix.dotnet-version }}" ${{env.PROJECT_ROOT}}/todoapp.csproj
+        run: dotnet test --logger trx --no-restore --verbosity normal --results-directory "${{ env.PROJECT_ROOT }}/${{ env.APP_DIR }}/TestResults-${{ matrix.dotnet-version }}" ${{ env.PROJECT_ROOT }}/todoapp.csproj
       - name: Upload dotnet test results
         uses: actions/upload-artifact@v3
         with:
@@ -85,10 +93,10 @@ jobs:
 
        
       - name: Publish Artifacts
-        run: dotnet publish --configuration Debug -o ${{env.PROJECT_ROOT}}/bin/Debug ${{env.PROJECT_ROOT}}/todoapp.csproj
+        run: dotnet publish --configuration Debug -o ${{ env.PROJECT_ROOT }}/${{ env.APP_DIR }} ${{ env.PROJECT_ROOT }}/todoapp.csproj
 
       - name: Upload Artifacts for Deployment
         uses: actions/upload-artifact@v2
         with:
           name: .net-app
-          path: ${{env.PROJECT_ROOT}}/bin/Debug
+          path: ${{ env.PROJECT_ROOT }}/${{ env.APP_DIR }}
