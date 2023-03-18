@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'app/demo/todoapp-svc/**'
+      - '.github/workflows/**'
   
   workflow_dispatch:
 env:
@@ -37,8 +38,8 @@ jobs:
     # Purge Key Vault prior to deploying a new instance
     - name: Purge Key Vault
       run: |
-        AKV_NAME=$(az keyvault list-deleted --resource-group ${{ secrets.CLUSTER_RESOURCE_GROUP }} --query "[].name" -o tsv)
-        if ${{ contains(${{ AKV_NAME }}, "containers") }}
+        AKV_NAME=$(az keyvault show-deleted --name akv-container-devsecops --location eastus --query "name")
+        if ${{ contains($AKV_NAME, "containers") }}
           az keyvault purge --name $AKV_NAME
 
     # Deploy Bicep file
