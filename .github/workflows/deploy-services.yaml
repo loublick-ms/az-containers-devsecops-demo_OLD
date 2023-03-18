@@ -1,3 +1,5 @@
+name: Deploy Azure Services
+
 on:
   push:
     branches:
